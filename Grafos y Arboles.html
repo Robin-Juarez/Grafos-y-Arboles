@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grafos y Árboles</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#222;--card:#fff;--mut:#666;--bd:#ddd;--nodo:#cfe8ff;--acc:#3b6fb6}
+@media (prefers-color-scheme:dark){:root{--bg:#1e1f22;--fg:#eee;--card:#2a2c30;--mut:#aaa;--bd:#444;--nodo:#35557a;--acc:#6aa0e8}}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font-family:system-ui,"Segoe UI",sans-serif}
+.w{max-width:940px;margin:auto}h1{text-align:center;margin:6px 0 12px}h2{font-size:1.05rem;margin:0 0 8px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin:12px 0;overflow-x:auto}
+.m{color:var(--mut)}.r{color:#d22;font-weight:700}.er2{color:#d22}
+button,select,textarea,input{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:9px 12px}
+button{cursor:pointer}button:hover{border-color:var(--acc)}.b{display:block;width:100%;text-align:left;margin:8px 0}
+.p{background:var(--acc);color:#fff;border-color:var(--acc)}textarea{width:100%;box-sizing:border-box;min-height:120px}
+input[type=text]{width:100%;box-sizing:border-box}pre{margin:0;font-size:.92rem}
+table{border-collapse:collapse}td,th{border:1px solid var(--bd);padding:3px 8px;text-align:center}th{background:var(--bd)}
+svg{max-width:100%;height:auto}.e{stroke:var(--mut);stroke-width:1.8;fill:none}.er{stroke:#d22;stroke-width:4;fill:none}
+.nd{fill:var(--nodo);stroke:var(--acc);stroke-width:2}.nr{fill:#ffb3b3;stroke:#d22;stroke-width:2.5}
+.tx{fill:var(--fg);font:bold 13px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central}
+.pe{fill:var(--mut);font:12px system-ui,sans-serif;text-anchor:middle}.bd{fill:#d22}
+.bt{fill:#fff;font:bold 11px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central}
+.f{display:flex;flex-wrap:wrap;gap:12px}.f>div{flex:1;min-width:250px;text-align:center}label{margin-right:14px}
+</style></head><body><div class="w">
+<h1>Grafos y Árboles</h1>
+<div id="v"></div>
+</div>
+<script>
+/* =====================================================================
+ PROGRAMA: ESTRUCTURAS DE DATOS - GRAFOS y ARBOLES (version web)
+ Es el mismo programa de Python, pasado a JavaScript para usarlo en el navegador.
+ MENU: 1. GRAFOS (matriz de adyacencia, recorridos BFS/DFS, mejor ruta)
+       2. ARBOLES (recorridos preorden, inorden, postorden)
+ Cada estructura tiene 3 opciones: PROBLEMA COMPLETO (se escribe y se interpreta),
+ DATOS CONOCIDOS (formulario) y EJEMPLO. Todo se DIBUJA (circulos = nodos).
+ MATEMATICAS: grafo G=(V,E); matriz de adyacencia (1/0 o pesos); grado y lema del
+ apreton de manos (suma de grados = 2*aristas); BFS (cola) y DFS (recursion) O(V+E);
+ Dijkstra dist[v]=min(dist[v],dist[u]+w) (sin pesos negativos); arbol: aristas=nodos-1,
+ altura, recorridos O(n); arbol de busqueda: inorden = valores ordenados.
+ En cada funcion: QUE HACE / ENTRADA / PROCESO / SALIDA (resumido en un comentario).
+===================================================================== */
+const $=id=>document.getElementById(id);
+const sa=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); // QUE HACE: minusculas sin acentos
+const nat=(a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'}); // orden natural: P2 antes que P10
+const fmt=n=>Number.isInteger(+n)?String(+n):String(n);                         // 4.0 -> 4
+const nv=v=>isNaN(+v)?String(v):fmt(v);                                         // normaliza un valor del arbol
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PAL=/[\p{L}\p{N}_]+/gu;
+const REL=new Set('de con hacia elige eligen eligio conecta conectado conectada unido unida'.split(' ')); // palabras de relacion
+const RELL=new Set('es son ser esta estan amigo amiga amigos amigas el la los las un una y e o u a al del finalmente ademas tambien luego despues se que en por para pero ya su sus tiene tienen entre amistad conexion conexiones'.split(' '));
+const RA=new Set([...RELL,...'de del tiene tienen como arbol binario raiz nodo nodos insertar inserte valores valor numeros numero elementos elemento orden siguiente busqueda dato datos lo si no hay lado'.split(' ')]);
+
+/* ---------------- GRAFOS: clase Grafo (lista de adyacencia + algoritmos) ---------------- */
+class Grafo{
+ constructor(dir=false,izq=null){this.dir=dir;this.izq=izq;this.ady=new Map();} // ENTRADA: dirigido?, grupo izquierdo (bipartito)
+ nodo(n){if(!this.ady.has(n))this.ady.set(n,new Map());}                       // agrega un nodo si no existe
+ arista(a,b,p=1){this.nodo(a);this.nodo(b);                                      // conecta a-b con peso; si no es dirigido va en ambos sentidos
+  const s=(x,y)=>{const m=this.ady.get(x);if(!m.has(y)||p<m.get(y))m.set(y,p)};s(a,b);if(!this.dir)s(b,a);}
+ nodos(){return [...this.ady.keys()].sort(nat)}
+ vec(n){return [...this.ady.get(n).keys()].sort(nat)}
+ pond(){return [...this.ady.values()].some(m=>[...m.values()].some(p=>p!==1))}  // hay pesos distintos de 1?
+ aristas(){const r=[];for(const u of this.nodos())for(const v of this.vec(u))if(this.dir||nat(u,v)<0)r.push([u,v,this.ady.get(u).get(v)]);return r} // sin repetir
+ matriz(){const P=this.pond(),N=this.nodos();                                    // MATRIZ DE ADYACENCIA: 1/0 o peso/"-"
+  return [N,N.map(i=>N.map(j=>i===j?0:this.ady.get(i).has(j)?(P?this.ady.get(i).get(j):1):(P?'-':0)))]}
+ grados(){const e={};for(const n of this.ady.keys())e[n]=0;for(const m of this.ady.values())for(const v of m.keys())e[v]++;return e} // aristas que entran
+ comps(){const vec=new Map([...this.ady.keys()].map(n=>[n,new Set()]));         // COMPONENTES CONEXAS con BFS (sin importar el sentido)
+  for(const [u,m] of this.ady)for(const v of m.keys()){vec.get(u).add(v);vec.get(v).add(u)}
+  const vis=new Set(),cs=[];for(const n of this.nodos()){if(vis.has(n))continue;const c=[],q=[n];vis.add(n);
+   while(q.length){const x=q.shift();c.push(x);for(const y of vec.get(x))if(!vis.has(y)){vis.add(y);q.push(y)}}cs.push(c.sort(nat))}return cs}
+ bfs(s){const vis=new Set([s]),q=[s],o=[];while(q.length){const a=q.shift();o.push(a);for(const v of this.vec(a))if(!vis.has(v)){vis.add(v);q.push(v)}}return o} // ANCHURA (cola)
+ dfs(s){const vis=new Set(),o=[];const f=n=>{vis.add(n);o.push(n);for(const v of this.vec(n))if(!vis.has(v))f(v)};f(s);return o}                        // PROFUNDIDAD (recursion)
+ dijk(o){const dist=new Map(),prev=new Map(),ok=new Set();for(const n of this.ady.keys())dist.set(n,Infinity);dist.set(o,0); // DIJKSTRA: distancias minimas desde o
+  for(;;){let u=null;for(const [n,d] of dist)if(!ok.has(n)&&d<Infinity&&(u===null||d<dist.get(u)))u=n;if(u===null)break;ok.add(u);
+   for(const [v,p] of this.ady.get(u)){const nd=dist.get(u)+p;if(nd<dist.get(v)){dist.set(v,nd);prev.set(v,u)}}} // relajacion de la arista u->v
+  return [dist,prev]}
+ ruta(o,d){const [dist,prev]=this.dijk(o);if(dist.get(d)===Infinity)return [[],Infinity];const r=[];for(let x=d;x!==undefined;x=prev.get(x))r.unshift(x);return [r,dist.get(d)]} // MEJOR RUTA
+}
+
+/* ---------------- GRAFOS: interprete de problemas escritos en texto ---------------- */
+// QUE HACE: convierte un problema en lenguaje natural en conexiones. ENTRADA: texto.
+// PROCESO: el ultimo nombre antes de una palabra de relacion (de, con, hacia, elige...) es el
+// nuevo SUJETO; los nombres anteriores son destinos del sujeto previo. "hacia" = dirigido;
+// "elige" = bipartito. SALIDA: {ar:[pares], dir, izq}
+function interpGrafo(txt){
+ txt=txt.replace(/\b([A-Za-z])\.(\d+)/g,'$1$2').replace(/\bde\s+(?:la\s+|el\s+)?([\p{L}\p{N}_]+)\s+hacia/giu,'$1 hacia');
+ const P=txt.match(PAL)||[],usaL=P.some(p=>p.length===1&&/[A-Z]/.test(p)&&!'YEAOU'.includes(p));
+ const nom=Object.create(null),ar=[],suj=[];let dir=false,elige=false,s=null,pend=[];
+ const uni=p=>{const k=sa(p);return nom[k]??(nom[k]=p[0].toUpperCase()+p.slice(1))};
+ const guardar=(sj,ds)=>{if(sj===null)return;for(const d of ds)if(d!==sj)ar.push([sj,d]);if(ds.length&&!suj.includes(sj))suj.push(sj)};
+ for(const p of P){const k=sa(p),letra=usaL&&p.length===1&&/[A-Z]/.test(p);
+  if(REL.has(k)){if(k==='hacia')dir=true;if(['elige','eligen','eligio'].includes(k))elige=true;
+   if(pend.length){const nu=pend.pop();guardar(s,pend);s=nu;pend=[]}continue}
+  if(RELL.has(k)&&!letra)continue;pend.push(uni(p))}
+ guardar(s,pend);
+ const pre=new Set(Object.values(nom).filter(n=>/^[A-Za-z]+\d+$/.test(n)).map(n=>n.match(/^[A-Za-z]+/)[0]));
+ let a2=ar,s2=suj;if(pre.size===1){const [pf]=pre,c=n=>/^\d+$/.test(n)?pf+n:n;a2=ar.map(([a,b])=>[c(a),c(b)]);s2=suj.map(c)} // la 2 -> P2
+ return {ar:a2,dir,izq:elige?new Set(s2):null};
+}
+const SEP=/->|[>,:;=|-]/g;
+// QUE HACE: reconoce una linea con peso "A B 4" o "A-B:4". SALIDA: [a,b,peso], 'neg' si es negativo, o null.
+function lineaPeso(l){if(/\s-\d+(\.\d+)?\s*$/.test(l))return 'neg';const t=l.replace(SEP,' ').trim().split(/\s+/);
+ if(t.length!==3||isNaN(+t[2])||REL.has(sa(t[0]))||REL.has(sa(t[1])))return null;return [t[0],t[1],+t[2]]}
+// OPCION 1 (grafos): arma el grafo desde el texto del problema. SALIDA: [grafo, avisos]
+function grafoTexto(txt){const pes=[],tx=[],av=[];
+ for(const l of txt.split('\n').map(x=>x.trim()).filter(Boolean)){const d=lineaPeso(l);
+  if(d==='neg')av.push('Peso negativo no permitido (Dijkstra requiere pesos >= 0): '+l);else if(d)pes.push(d);else tx.push(l)}
+ const r=interpGrafo(tx.join('\n')),g=new Grafo(r.dir,r.izq);r.ar.forEach(([a,b])=>g.arista(a,b));pes.forEach(([a,b,w])=>g.arista(a,b,w));return [g,av]}
+// OPCION 2 (grafos): arma el grafo desde el formulario (nodos + conexiones). Valida nodos y pesos >= 0.
+function grafoDatos(dir,pond,nodosTxt,conTxt){const N=nodosTxt.split(/[,\s]+/).filter(Boolean),g=new Grafo(dir),av=[];
+ N.forEach(n=>g.nodo(n));const real=Object.fromEntries(N.map(n=>[sa(n),n]));
+ for(const l of conTxt.split('\n').map(x=>x.trim()).filter(Boolean)){const t=l.replace(SEP,' ').trim().split(/\s+/);let ds,w=1;
+  if(pond){if(/\s-\d+(\.\d+)?\s*$/.test(l)){av.push('Peso negativo: '+l);continue}
+   if(t.length!==3||isNaN(+t[2])){av.push('Formato incorrecto: '+l);continue}ds=[t[1]];w=+t[2]}else ds=t.slice(1);
+  if(![t[0],...ds].every(x=>real[sa(x)])){av.push('Algun nodo no existe en: '+l);continue}
+  for(const d of ds)if(sa(d)!==sa(t[0]))g.arista(real[sa(t[0])],real[sa(d)],w)}
+ return [g,av]}
+
+/* ---------------- ARBOLES: clase Arbol (binario) y recorridos ---------------- */
+const cmp=(a,b)=>(!isNaN(+a)&&!isNaN(+b))?Math.sign(+a-+b):nat(a,b); // numeros como numeros, texto en orden alfabetico
+class Arbol{
+ constructor(abb=false){this.raiz=null;this.abb=abb}
+ ins(v){const n={v,i:null,d:null};if(!this.raiz){this.raiz=n;return true}let a=this.raiz; // ARBOL DE BUSQUEDA: menor a la izq, mayor a la der
+  for(;;){const c=cmp(v,a.v);if(c===0)return false;const k=c<0?'i':'d';if(!a[k]){a[k]=n;return true}a=a[k]}}
+ pre(){const r=[],f=n=>{if(n){r.push(n.v);f(n.i);f(n.d)}};f(this.raiz);return r}  // PREORDEN: raiz, izq, der
+ ino(){const r=[],f=n=>{if(n){f(n.i);r.push(n.v);f(n.d)}};f(this.raiz);return r}  // INORDEN: izq, raiz, der
+ pos(){const r=[],f=n=>{if(n){f(n.i);f(n.d);r.push(n.v)}};f(this.raiz);return r}  // POSTORDEN: izq, der, raiz
+ niv(){const r=[],q=this.raiz?[this.raiz]:[];while(q.length){const n=q.shift();r.push(n.v);if(n.i)q.push(n.i);if(n.d)q.push(n.d)}return r} // por niveles (cola)
+ nodos(){const r=[],f=n=>{if(n){r.push(n);f(n.i);f(n.d)}};f(this.raiz);return r}
+ alt(){const f=n=>n?1+Math.max(f(n.i),f(n.d)):-1;return f(this.raiz)}               // altura = aristas del camino mas largo
+ xy(){const p={};let c=0;const f=(n,d)=>{if(n){f(n.i,d+1);p[n.v]=[c++,d];f(n.d,d+1)}};f(this.raiz,0);return p} // x = lugar en inorden, y = profundidad
+ texto(){const l=[],f=(n,k,r)=>{if(n){f(n.d,k+1,'(der) ');l.push('      '.repeat(k)+r+n.v);f(n.i,k+1,'(izq) ')}};f(this.raiz,0,'');return l.join('\n')}
+}
+function armarAbb(vs){const a=new Arbol(true),rep=[];for(const v of vs){const x=nv(v);if(!a.ins(x))rep.push(x)}return [a,rep]} // arbol de busqueda desde una lista
+// QUE HACE: arma el arbol desde relaciones [padre,hijo,lado]. Valida: un solo padre, max 2 hijos, una sola raiz, sin ciclos.
+function armarRel(pares){const nom=[],padre={},hij={};
+ for(const [p,h,l] of pares){for(const n of [p,h])if(!nom.includes(n))nom.push(n);
+  if(h in padre){if(padre[h]!==p)throw Error(`${h} tiene dos padres (${padre[h]} y ${p}). En un árbol cada nodo tiene un solo padre.`);continue}
+  padre[h]=p;(hij[p]??=[]).push([h,l])}
+ const rs=nom.filter(n=>!(n in padre));if(rs.length!==1)throw Error('Un árbol debe tener una sola raíz. Encontré: '+(rs.join(', ')||'ninguna (hay un ciclo)'));
+ const N=Object.fromEntries(nom.map(n=>[n,{v:n,i:null,d:null}]));
+ for(const [p,ls] of Object.entries(hij)){if(ls.length>2)throw Error(`${p} tiene ${ls.length} hijos; un árbol binario permite máximo 2.`);let i=null,d=null;
+  for(const [h,l] of ls){if(l==='L'){if(i)throw Error(`${p} tiene dos hijos izquierdos.`);i=h}else if(l==='R'){if(d)throw Error(`${p} tiene dos hijos derechos.`);d=h}}
+  for(const [h,l] of ls)if(!l){if(!i)i=h;else d=h}
+  N[p].i=i?N[i]:null;N[p].d=d?N[d]:null}
+ const a=new Arbol();a.raiz=N[rs[0]];if(a.nodos().length!==nom.length)throw Error('Hay nodos que no se alcanzan desde la raíz.');return a}
+// QUE HACE: interpreta un problema de arboles escrito en texto. "Insertar 50, 30..." -> arbol de busqueda;
+// "A tiene hijos B y C", "D es hijo izquierdo de B" -> relaciones. SALIDA: ['abb',valores] o ['rel',pares]
+function interpArbol(txt){
+ txt=txt.replace(/([\p{L}\p{N}_]+)\s+es\s+hij[oa]\s*(izquierd[oa]|derech[oa])?\s+de\s+([\p{L}\p{N}_]+)/giu,'$3 tiene hijo $2 $1');
+ const P=txt.match(/-?\d+(?:\.\d+)?|[\p{L}\p{N}_]+/gu)||[],usaL=P.some(p=>p.length===1&&/[A-Z]/.test(p)&&!'YEAOU'.includes(p));
+ const rell=p=>{const k=sa(p);return (RA.has(k)||REL.has(k))&&!(usaL&&p.length===1&&/[A-Z]/.test(p))};
+ if(!P.some(p=>['hijo','hijos','padre'].includes(sa(p))))return ['abb',P.filter(p=>!rell(p)).map(nv)];
+ const pares=[];let s=null,pend=[],lado=null;const guardar=(sj,hs)=>{if(sj!==null)hs.forEach(([h,l])=>{if(h!==sj)pares.push([sj,h,l])})};
+ for(const p of P){const k=sa(p);
+  if(['izquierdo','izquierda','izq'].includes(k))lado='L';else if(['derecho','derecha','der'].includes(k))lado='R';
+  else if(['hijo','hijos','padre','con'].includes(k)){if(pend.length){const nu=pend.pop();guardar(s,pend);s=nu[0];pend=[]}}
+  else if(!rell(p)){pend.push([nv(p),lado]);lado=null}}
+ guardar(s,pend);return ['rel',pares]}
+// QUE HACE: de un texto o de las lineas "PADRE IZQ DER" ('-' = sin hijo) arma el arbol. SALIDA: [arbol, repetidos]
+function arbolDe(tipo,txt){let rep=[];
+ if(tipo==='texto'){const [t,d]=interpArbol(txt);if(t==='abb'){if(d.length<2)throw Error('Necesito al menos 2 valores.');const r=armarAbb(d);return r}return [armarRel(d),rep]}
+ if(tipo==='valores'){const vs=txt.split(/[,;\s]+/).filter(Boolean);if(vs.length<2)throw Error('Necesito al menos 2 valores.');return armarAbb(vs)}
+ const pares=[];for(const l of txt.split('\n').map(x=>x.trim()).filter(Boolean)){const t=l.split(/[,;\s]+/).filter(Boolean);
+  if(t.length<2||t.length>3)throw Error('Use: PADRE HIJO_IZQUIERDO HIJO_DERECHO  (en: '+l+')');
+  ['L','R'].forEach((s,i)=>{if(t[i+1]&&t[i+1]!=='-')pares.push([nv(t[0]),nv(t[i+1]),s])})}
+ return [armarRel(pares),rep]}
+
+/* ---------------- DIBUJO (SVG): circulos = nodos, lineas/flechas = conexiones ---------------- */
+// QUE HACE: dibuja el grafo (circulo, o 2 columnas si es bipartito), con pesos y la mejor ruta en ROJO.
+function svgG(g,ruta){const N=g.nodos(),n=N.length,W=560,r=Math.min(44,14+4*Math.max(...N.map(x=>x.length))),pos={};
+ if(g.izq){const L=N.filter(x=>g.izq.has(x)),R=N.filter(x=>!g.izq.has(x));[[.16,L],[.84,R]].forEach(([c,l])=>l.forEach((x,k)=>pos[x]=[W*c,W*(k+1)/(l.length+1)]))}
+ else{const rad=W/2-r-20;N.forEach((x,k)=>{const a=2*Math.PI*k/n-Math.PI/2;pos[x]=[W/2+rad*Math.cos(a),W/2+rad*Math.sin(a)]})}
+ const rs=new Set();if(ruta)for(let i=0;i<ruta.length-1;i++){rs.add(ruta[i]+'\0'+ruta[i+1]);if(!g.dir)rs.add(ruta[i+1]+'\0'+ruta[i])}
+ const tr=(u,v)=>{const [x1,y1]=pos[u],[x2,y2]=pos[v],d=Math.hypot(x2-x1,y2-y1)||1,ux=(x2-x1)/d,uy=(y2-y1)/d,e=g.dir?3:0,
+   ax=x1+ux*r,ay=y1+uy*r,bx=x2-ux*(r+e),by=y2-uy*(r+e);
+  if(g.dir){const cx=(ax+bx)/2-uy*16,cy=(ay+by)/2+ux*16;return [`M${ax},${ay} Q${cx},${cy} ${bx},${by}`,.25*ax+.5*cx+.25*bx,.25*ay+.5*cy+.25*by]}
+  return [`M${ax},${ay} L${bx},${by}`,(ax+bx)/2,(ay+by)/2]};
+ const mk=(id,c,s)=>`<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="${s}" markerHeight="${s}" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="${c}"/></marker>`;
+ let s=`<svg viewBox="0 0 ${W} ${W}" width="${W}"><defs>${mk('mg','#888',8)}${mk('mr','#d22',6)}</defs>`,et='';
+ for(const [u,v,p] of g.aristas()){const [d,mx,my]=tr(u,v),rj=rs.has(u+'\0'+v);
+  s+=`<path d="${d}" class="${rj?'er':'e'}"${g.dir?` marker-end="url(#${rj?'mr':'mg'})"`:''}/>`;
+  if(g.pond())et+=`<text x="${mx}" y="${my-5}" class="pe">${fmt(p)}</text>`}
+ s+=et;const mr=new Set(ruta||[]);
+ for(const x of N){const [px,py]=pos[x];s+=`<circle cx="${px}" cy="${py}" r="${r}" class="${mr.has(x)?'nr':'nd'}"/><text x="${px}" y="${py}" class="tx">${esc(x)}</text>`}
+ return s+'</svg>'}
+// QUE HACE: dibuja el arbol; el numero rojo de cada nodo es su ORDEN DE VISITA en el recorrido dado.
+function svgT(a,orden){const P=a.xy(),sx=52,sy=66,W=Math.max(240,Object.keys(P).length*sx+30),H=(a.alt()+1)*sy+30,rk={};
+ orden.forEach((v,i)=>rk[v]=i+1);const xy=Object.fromEntries(Object.entries(P).map(([v,[x,y]])=>[v,[28+x*sx,34+y*sy]]));let s=`<svg viewBox="0 0 ${W} ${H}" width="${W}">`;
+ for(const n of a.nodos())for(const h of [n.i,n.d])if(h)s+=`<line x1="${xy[n.v][0]}" y1="${xy[n.v][1]}" x2="${xy[h.v][0]}" y2="${xy[h.v][1]}" class="e"/>`;
+ for(const [v,[x,y]] of Object.entries(xy))s+=`<circle cx="${x}" cy="${y}" r="19" class="nd"/><text x="${x}" y="${y}" class="tx">${esc(v)}</text><circle cx="${x+17}" cy="${y-17}" r="9" class="bd"/><text x="${x+17}" y="${y-17}" class="bt">${rk[v]}</text>`;
+ return s+'</svg>'}
+
+/* ---------------- RESULTADOS ---------------- */
+let G=null,A=null;
+const tabla=(N,F)=>'<table><tr><th></th>'+N.map(x=>`<th>${esc(x)}</th>`).join('')+'</tr>'+N.map((n,i)=>`<tr><th>${esc(n)}</th>`+F[i].map(x=>`<td>${x==='-'?x:fmt(x)}</td>`).join('')+'</tr>').join('')+'</table>';
+const sel=(id,N,v)=>`<select id="${id}" onchange="rg()">${N.map(x=>`<option${x===v?' selected':''}>${esc(x)}</option>`).join('')}</select>`;
+// QUE HACE: muestra TODOS los resultados del grafo: dibujo, matriz, lista, grados, conectividad, BFS, DFS y mejor ruta.
+// ENTRADA: nodo de inicio (recorridos) y origen/destino (mejor ruta); se pueden cambiar en los menus desplegables.
+function resG(av,ini,ori,des){const N=G.nodos();ini=ini||N[0];ori=ori||N[0];des=des||N[N.length-1];
+ const [ruta,costo]=G.ruta(ori,des),[dist]=G.dijk(ori),u=G.pond()?'':' conexiones',[mn,mt]=G.matriz(),gr=G.grados(),cs=G.comps(),ar=G.aristas();
+ const lista=N.map(n=>n+' -> '+(G.vec(n).map(v=>G.pond()?`${v}(${fmt(G.ady.get(n).get(v))})`:v).join(', ')||'(sin conexiones salientes)')).join('\n');
+ let gs=N.map(n=>G.dir?`${n}: sale ${G.ady.get(n).size}, entra ${gr[n]}`:`${n}: ${G.ady.get(n).size} conexiones`).join('\n');
+ if(!G.dir)gs+=`\nSuma de grados = ${N.reduce((s,n)=>s+G.ady.get(n).size,0)} = 2 x ${ar.length} aristas (apretón de manos)`;
+ $('r').innerHTML=(av.length?`<div class="c er2">${av.map(esc).join('<br>')}</div>`:'')+
+ `<div class="c"><h2>Grafo ${G.dir?'DIRIGIDO':'NO DIRIGIDO'}: ${N.length} nodos y ${ar.length} conexiones</h2>${svgG(G,ruta)}<p class="m">La mejor ruta de ${esc(ori)} a ${esc(des)} va en rojo.</p></div>`+
+ `<div class="c"><h2>Matriz de adyacencia</h2>${tabla(mn,mt)}</div><div class="c"><h2>Lista de adyacencia</h2><pre>${esc(lista)}</pre></div>`+
+ `<div class="c"><h2>Grado de cada nodo y conectividad</h2><pre>${esc(gs)}</pre><p>${cs.length===1?'El grafo es <b>CONEXO</b>.':`El grafo <b>NO es conexo</b>: ${cs.length} componentes: `+esc(cs.map(c=>c.join(', ')).join(' | '))}</p></div>`+
+ `<div class="c"><h2>Recorridos desde ${sel('si',N,ini)}</h2><p><b>Anchura (BFS):</b> ${esc(G.bfs(ini).join(' → '))}</p><p><b>Profundidad (DFS):</b> ${esc(G.dfs(ini).join(' → '))}</p></div>`+
+ `<div class="c"><h2>Mejor ruta (Dijkstra): de ${sel('so',N,ori)} a ${sel('sd',N,des)}</h2><p>${ruta.length?`<span class="r">${esc(ruta.join(' → '))}</span> &nbsp; costo total: <b>${fmt(costo)}${u}</b>`:'No existe ruta entre esos nodos.'}</p>`+
+ `<p class="m">Distancias mínimas desde ${esc(ori)}:</p><pre>${esc(N.map(n=>`${ori} -> ${n}: `+(dist.get(n)===Infinity?'sin ruta':fmt(dist.get(n))+u)).join('\n'))}</pre></div>`;
+ $('r').scrollIntoView({behavior:'smooth'})}
+function rg(){resG([],$('si').value,$('so').value,$('sd').value)}
+// QUE HACE: muestra TODOS los resultados del arbol: datos, arbol en texto, dibujo con el orden de visita y los 3 recorridos.
+function resA(av){const n=A.nodos().length,h=A.nodos().filter(x=>!x.i&&!x.d).length,R=[['PREORDEN (raíz - izq - der)',A.pre()],['INORDEN (izq - raíz - der)',A.ino()],['POSTORDEN (izq - der - raíz)',A.pos()]];
+ $('r').innerHTML=(av.length?`<div class="c m">${av.map(esc).join('<br>')}</div>`:'')+
+ `<div class="c"><h2>${A.abb?'Árbol binario de búsqueda':'Árbol binario'}</h2><p>Raíz: <b>${esc(A.raiz.v)}</b> &nbsp; Nodos: <b>${n}</b> &nbsp; Hojas: <b>${h}</b> &nbsp; Nodos internos: <b>${n-h}</b> &nbsp; Altura: <b>${A.alt()}</b> &nbsp; Aristas: <b>${n-1}</b> (= nodos - 1)</p><pre>${esc(A.texto())}</pre><p class="m">(la raíz está a la izquierda; arriba los hijos derechos, abajo los izquierdos)</p></div>`+
+ `<div class="c"><h2>Recorridos (el número rojo indica el orden de visita)</h2><div class="f">${R.map(([t,o])=>`<div><h2>${t}</h2>${svgT(A,o)}</div>`).join('')}</div></div>`+
+ `<div class="c"><h2>Resultados</h2>${R.map(([t,o])=>`<p><b>${t.split(' ')[0]}:</b> ${esc(o.join(' → '))}</p>`).join('')}<p><b>POR NIVELES:</b> ${esc(A.niv().join(' → '))}</p>${A.abb?'<p class="m">En un árbol de búsqueda el INORDEN entrega los valores ordenados.</p>':''}</div>`;
+ $('r').scrollIntoView({behavior:'smooth'})}
+
+/* ---------------- EJEMPLOS (los mismos del programa de Python) ---------------- */
+const EG=[['Grupo de alumnos (amistades)','Marta es amiga de Sergio, Eloy e Irene. Sergio es amigo de Lidia, Alicia, Marta y Guille. Lidia de Sergio y Alicia. Alicia de Lidia, Sergio y Guille. Eloy de Marta, Irene, Carlos y Guille. Carlos de Eloy, Guille y Francisco. Guille de Sergio, Alicia, Francisco, Carlos y Eloy. Francisco de Guille y Carlos.'],
+ ['Alumnos becados (alumnos y destinos)','Sergio elige México, Chile y Colombia, Eloy elige Argentina, Alba elige México y Colombia y finalmente Marta elige Argentina.'],
+ ['Red de ordenadores','1 con el 2,4,5\n2 con el 1,3,5,6\n3 con el 2,7\n4 con el 1,5\n5 con el 1,2,6 y 8\n6 con el 2,5,7\n7 con el 3,6,9\n9 con el 6,7,8\n8 con el 5,9,10\n10 con el 8'],
+ ['Urbanización (calles de un solo sentido)','de la P.1 hacia la 2 y la 9, de la P.2 hacia la 3, de la P.3 hacia la 4 y la 6, de la P.4 hacia la 3, de la P.5 hacia la 4, de la P.6 hacia la 7 y la 5, de la P.7 hacia la 2 y la 8 y finalmente de la P.9 hacia la 2 y la 8.']];
+const EA=[['Árbol binario de búsqueda (valores 50, 30, 70, 20, 40, 60, 80, 65)','texto','Insertar 50, 30, 70, 20, 40, 60, 80, 65'],
+ ['Árbol por relaciones (A tiene hijos B y C, ...)','texto','A tiene hijos B y C. B tiene hijos D y E. C tiene hijo derecho F. E tiene hijo izquierdo G.'],
+ ['Árbol de expresión ((8 + 2) * (9 - 4)): preorden = prefija, inorden = infija, postorden = posfija','expr','((8+2)*(9-4))']];
+
+/* ---------------- MENUS Y PANTALLAS ---------------- */
+const V=h=>{$('v').innerHTML=h;scrollTo(0,0)};
+// MENU PRINCIPAL: elegir la estructura.
+function vMenu(){V(`<div class="c"><h2>MENÚ DE ESTRUCTURAS DE DATOS</h2>
+<button class="b p" onclick="vSub('g')"><b>1. GRAFOS</b><br><small>matriz de adyacencia, recorridos, mejor ruta</small></button>
+<button class="b p" onclick="vSub('a')"><b>2. ÁRBOLES</b><br><small>recorrido inorden, postorden, preorden</small></button></div>`)}
+// MENU DE CADA ESTRUCTURA: las 3 opciones (problema completo, datos conocidos, ejemplo).
+function vSub(e){const n=e==='g'?'GRAFOS':'ÁRBOLES';V(`<div class="c"><h2>${n}</h2>
+<button class="b" onclick="vIn('${e}',1)">1. Escribir el PROBLEMA COMPLETO (el programa lo interpreta)</button>
+<button class="b" onclick="vIn('${e}',2)">2. Ingresar DATOS CONOCIDOS</button>
+<button class="b" onclick="vIn('${e}',3)">3. Usar un EJEMPLO</button>
+<button class="b" onclick="vMenu()">← Volver al menú principal</button></div>`)}
+const back=e=>`<button onclick="vSub('${e}')">← Volver</button>`;
+// PANTALLA DE ENTRADA segun la estructura (e) y la opcion (m).
+function vIn(e,m){let h='';
+ if(m===1)h=e==='g'?`<h2>Problema completo (grafos)</h2><p class="m">Escriba solo las relaciones: <i>Marta es amiga de Sergio, Eloy e Irene…</i> · <i>1 con el 2,4,5</i> · <i>de la P.1 hacia la 2 y la 9</i> · con peso: <i>A B 4</i></p><textarea id="t" placeholder="Escriba aquí el problema…"></textarea>`
+  :`<h2>Problema completo (árboles)</h2><p class="m">Ejemplos: <i>Insertar 50, 30, 70, 20, 40</i> · <i>A tiene hijos B y C. B tiene hijos D y E. C tiene hijo derecho F.</i> · <i>D es hijo izquierdo de B</i></p><textarea id="t" placeholder="Escriba aquí el problema…"></textarea>`;
+ if(m===2)h=e==='g'?`<h2>Datos conocidos (grafos)</h2><p><label><input type="checkbox" id="d"> Dirigido (un solo sentido)</label><label><input type="checkbox" id="p"> Con pesos</label></p>
+  <p>Nodos (separados por coma o espacio):</p><input type="text" id="n" placeholder="A, B, C, D"><p>Conexiones, una por línea: <i>ORIGEN DESTINO1 DESTINO2…</i> (con pesos: <i>ORIGEN DESTINO PESO</i>)</p><textarea id="t" placeholder="A B C&#10;B D"></textarea>`
+  :`<h2>Datos conocidos (árboles)</h2><p><label><input type="radio" name="k" value="valores" checked> Lista de valores (árbol de búsqueda)</label><label><input type="radio" name="k" value="conex"> Conexiones PADRE HIJO_IZQ HIJO_DER ('-' = sin hijo)</label></p><textarea id="t" placeholder="15 7 22 3 11 18 30&#10;&#10;o bien:&#10;M F T&#10;F B H&#10;T P W"></textarea>`;
+ if(m===3){const L=e==='g'?EG:EA;V(`<div class="c"><h2>Ejemplos (${e==='g'?'grafos':'árboles'})</h2>${L.map((x,i)=>`<button class="b" onclick="ejemplo('${e}',${i})">${i+1}. ${x[0]}</button>`).join('')}${back(e)}</div><div id="r"></div>`);return}
+ V(`<div class="c">${h}<p><button class="p" onclick="resolver('${e}',${m})">Resolver</button> ${back(e)}</p></div><div id="r"></div>`)}
+// ENTRADA: lo escrito en pantalla. PROCESO: arma el grafo/arbol. SALIDA: resultados o aviso de error.
+function resolver(e,m){const t=($('t')||{}).value||'';
+ try{if(e==='g'){let r;if(m===1)r=grafoTexto(t);else{const nodos=$('n').value;if(nodos.split(/[,\s]+/).filter(Boolean).length<2)throw Error('Escriba al menos 2 nodos.');r=grafoDatos($('d').checked,$('p').checked,nodos,t)}
+   if(r[0].ady.size<2)throw Error('No hay suficientes datos para armar el grafo.');G=r[0];resG(r[1])}
+  else{const r=arbolDe(m===1?'texto':document.querySelector('input[name=k]:checked').value==='valores'?'valores':'conex',t);A=r[0];resA(r[1].length?['Valores repetidos (se ignoraron): '+r[1].join(', ')]:[])}}
+ catch(x){$('r').innerHTML=`<div class="c er2"><b>No pude armar la estructura:</b> ${esc(x.message)}</div>`}}
+function ejemplo(e,i){try{ if(e==='g'){const [tt,tx]=EG[i];G=grafoTexto(tx)[0];resG([`PROBLEMA: ${tt}\n${tx}`])}
+ else{const [tt,k,tx]=EA[i];A=k==='expr'?armarRel([['*','+','L'],['*','-','R'],['+','8','L'],['+','2','R'],['-','9','L'],['-','4','R']]):arbolDe('texto',tx)[0];resA([`PROBLEMA: ${tt}\n${tx}`])}}catch(x){$('r').innerHTML=`<div class="c er2">${esc(x.message)}</div>`}}
+vMenu();
+</script></body></html>
