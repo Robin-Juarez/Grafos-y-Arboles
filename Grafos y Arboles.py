@@ -86,21 +86,64 @@
      su INORDEN da los valores ordenados. Insertar cuesta O(altura).
    - Arbol de expresion: preorden = notacion prefija, inorden = infija,
      postorden = posfija.
+
+ LIBRERIAS QUE USA (y para que sirve cada una):
+   heapq              cola de prioridad (monton): en Dijkstra entrega siempre el nodo
+                      pendiente de menor distancia, en O(log n).
+   re                 expresiones regulares: separan palabras y detectan formatos
+                      al leer el problema escrito.
+   unicodedata        quita acentos para comparar "Mexico" y "México" como iguales.
+   collections.deque  cola FIFO (el primero que entra es el primero que sale): se usa
+                      en BFS, en el recorrido por niveles y en las componentes conexas.
+   html               html.escape: evita que el texto rompa el HTML del reporte.
+   math               seno y coseno para ubicar los nodos en circulo (dibujo SVG).
+   os                 rutas de archivos: guarda el reporte junto al programa.
+   webbrowser         abre el reporte HTML en el navegador.
+   pathlib.Path       convierte la ruta del archivo en un enlace file:// para el navegador.
+   matplotlib.pyplot  ventana grafica: dibuja el grafo, la matriz y los arboles.
+   networkx           solo calcula posiciones y dibuja el grafo; los algoritmos
+                      (BFS, DFS, Dijkstra, recorridos) estan programados a mano.
+   (matplotlib y networkx se instalan con: python -m pip install matplotlib networkx;
+    las demas librerias ya vienen con Python.)
+
+ FLUJO GENERAL DEL PROGRAMA (ENTRADA -> PROCESO -> SALIDA):
+   ENTRADA : la persona elige la estructura (grafos o arboles), el modo (problema
+             escrito, datos conocidos o ejemplo) y escribe o elige los datos.
+   PROCESO : 1) interpretar_texto / interpretar_arbol_texto convierten el texto en
+                conexiones; 2) se arma el Grafo o el Arbol; 3) se calculan la matriz,
+                los grados, la conectividad, los recorridos y la mejor ruta (o los
+                recorridos preorden, inorden y postorden del arbol).
+   SALIDA  : resultados en consola + ventana grafica (dibujo) + reporte HTML opcional.
+
+ INDICE DE FUNCIONES (en el orden del archivo):
+   Texto        : sin_acentos, clave_natural, formatear
+   Grafos       : clase Grafo (nodos, aristas, matriz, grados, componentes, bfs, dfs,
+                  dijkstra, mejor_ruta)
+   Interprete   : interpretar_texto, interpretar_linea_con_peso, construir_grafo
+   Entrada      : modo_problema_completo, modo_datos_conocidos, ejemplo_precargado
+   Salida       : mostrar_conexiones, mostrar_matriz, mostrar_lista,
+                  mostrar_grados_y_conexidad, dibujar, resolver, menu_grafos
+   Arboles      : clases Nodo y Arbol, armar_abb, armar_arbol_relaciones,
+                  interpretar_arbol_texto, texto_arbol, estadisticas_arbol,
+                  mostrar_arbol, modos 1/2/3 de arboles, dibujar_arbol, resolver_arbol
+   Reporte HTML : guardar_y_abrir_html, tabla_html, svg_grafo, reporte_grafo_html,
+                  svg_arbol, reporte_arbol_html
+   Menus        : menu_arboles, menu_principal
 =====================================================================
 """
 
-import heapq                      # cola de prioridad (monton) para Dijkstra
-import re                         # expresiones regulares para leer el texto
-import unicodedata                # para quitar acentos al comparar palabras
-import html                       # escapar texto para el reporte HTML
-import math                       # seno y coseno para dibujar el grafo en SVG
-import os                         # rutas de archivos
-import webbrowser                 # abrir el reporte en el navegador
-from pathlib import Path          # convertir una ruta en enlace file://
-from collections import deque     # cola FIFO para BFS
+import heapq                      # cola de prioridad (monton): nodo de menor distancia en Dijkstra
+import re                         # expresiones regulares: separar palabras y detectar formatos
+import unicodedata                # quitar acentos al comparar palabras
+import html                       # escapar texto para que no rompa el reporte HTML
+import math                       # seno y coseno para ubicar los nodos en circulo (SVG)
+import os                         # rutas de archivos (guardar el reporte junto al programa)
+import webbrowser                 # abrir el reporte HTML en el navegador
+from pathlib import Path          # convertir una ruta en enlace file:// para el navegador
+from collections import deque     # cola FIFO: BFS, recorrido por niveles, componentes
 
-import matplotlib.pyplot as plt   # ventana grafica
-import networkx as nx             # solo para dibujar el grafo
+import matplotlib.pyplot as plt   # ventana grafica (dibujo del grafo, matriz y arboles)
+import networkx as nx             # solo para calcular posiciones y dibujar el grafo
 
 INF = float("inf")                # "infinito": nodo inalcanzable
 
@@ -111,8 +154,12 @@ INF = float("inf")                # "infinito": nodo inalcanzable
 def sin_acentos(texto):
     """
     QUE HACE: pasa un texto a minusculas y le quita los acentos.
-    ENTRADA : texto (ej. "México").   SALIDA: texto (ej. "mexico").
-    PARA QUE: comparar "Mexico" y "México" como la misma palabra.
+    COMO FUNCIONA: unicodedata.normalize("NFD") separa cada letra de su acento
+                   (e + ´) y despues se descartan las marcas de acento (categoria "Mn").
+    ENTRADA : texto (ej. "México").
+    PROCESO : normalizar -> quitar las marcas de acento -> pasar a minusculas.
+    SALIDA  : texto (ej. "mexico").
+    PARA QUE: comparar "Mexico" y "México" como si fueran la misma palabra.
     """
     base = unicodedata.normalize("NFD", texto)
     return "".join(c for c in base if unicodedata.category(c) != "Mn").lower()
@@ -120,9 +167,13 @@ def sin_acentos(texto):
 
 def clave_natural(texto):
     """
-    QUE HACE: clave de orden "natural": P2 va antes que P10 y 2 antes que 10.
-    PROCESO : separa letras y numeros; los numeros se comparan como numeros.
-    SALIDA  : lista usada por sorted(..., key=clave_natural).
+    QUE HACE: crea una clave de orden "natural": P2 va antes que P10 y 2 antes que 10
+              (el orden normal de texto pondria "10" antes que "2").
+    COMO FUNCIONA: re.split separa letras y numeros ("P10" -> ["P","10",""]);
+                   los pedazos numericos se vuelven int para compararse como numeros.
+    ENTRADA : texto (nombre de un nodo).
+    PROCESO : separar letras y numeros -> numeros a int -> letras a minusculas.
+    SALIDA  : lista que se usa como sorted(..., key=clave_natural).
     """
     partes = re.split(r"(\d+)", texto)
     return [int(p) if i % 2 else p.lower() for i, p in enumerate(partes)]
@@ -131,6 +182,9 @@ def clave_natural(texto):
 def formatear(numero):
     """
     QUE HACE: muestra 4.0 como 4 y 2.5 como 2.5 (solo presentacion).
+    ENTRADA : numero (int o float).
+    PROCESO : si float(numero).is_integer() es True se convierte a int.
+    SALIDA  : el numero sin ".0" cuando es entero.
     """
     return int(numero) if float(numero).is_integer() else numero
 
@@ -140,6 +194,16 @@ def formatear(numero):
 #  Guarda el grafo y contiene todos los algoritmos.
 # ===================================================================
 class Grafo:
+    """
+    QUE ES: la estructura de datos GRAFO G = (V, E) y todos sus algoritmos.
+    REPRESENTACION: LISTA DE ADYACENCIA = diccionario  nodo -> {vecino: peso}.
+       Ocupa O(V + E) de memoria (una matriz de adyacencia ocuparia O(V^2)).
+    METODOS: agregar_nodo, agregar_arista, nodos, vecinos, es_ponderado, aristas,
+       matriz_adyacencia, grados, componentes, bfs, dfs, dijkstra, mejor_ruta.
+    PROBLEMAS MATEMATICOS QUE RESUELVE: matriz de adyacencia, grado de los nodos
+       (lema del apreton de manos), conectividad, recorridos BFS y DFS y camino
+       minimo (Dijkstra). Cada metodo explica su calculo.
+    """
     def __init__(self, dirigido=False, izquierda=None):
         """
         QUE HACE: crea un grafo vacio.
@@ -158,7 +222,10 @@ class Grafo:
     def agregar_nodo(self, nodo):
         """
         QUE HACE: agrega un nodo si todavia no existe.
-        ENTRADA : nombre del nodo.   SALIDA: ninguna (modifica el grafo).
+        ENTRADA : nombre del nodo (texto).
+        PROCESO : si el nombre no esta en el diccionario, crea su entrada con un
+                  diccionario de vecinos vacio.
+        SALIDA  : ninguna (modifica el grafo).
         """
         if nodo not in self.ady:
             self.ady[nodo] = {}
@@ -184,23 +251,32 @@ class Grafo:
     # ---------------------------------------------------------------
     def nodos(self):
         """
-        QUE HACE: devuelve los nodos ordenados (orden natural).
-        SALIDA  : lista de nombres.
+        QUE HACE: devuelve los nodos ordenados.
+        ENTRADA : ninguna (usa el grafo).
+        PROCESO : toma las llaves del diccionario y las ordena con clave_natural
+                  (asi la matriz y los recorridos siempre salen en el mismo orden).
+        SALIDA  : lista de nombres de nodos.
         """
         return sorted(self.ady.keys(), key=clave_natural)
 
     # ---------------------------------------------------------------
     def vecinos(self, nodo):
         """
-        QUE HACE: devuelve los vecinos de un nodo ya ordenados.
+        QUE HACE: devuelve los vecinos de un nodo (los nodos a los que llega una arista).
+        ENTRADA : nombre del nodo.
+        PROCESO : toma las llaves de su diccionario de vecinos y las ordena (orden natural).
+        SALIDA  : lista de vecinos. Su largo es el grado de salida del nodo.
         """
         return sorted(self.ady[nodo], key=clave_natural)
 
     # ---------------------------------------------------------------
     def es_ponderado(self):
         """
-        QUE HACE: indica si alguna arista tiene un peso distinto de 1.
-        SALIDA  : True/False (decide como se muestran matriz y dibujo).
+        QUE HACE: indica si el grafo tiene pesos (distancias, costos...).
+        ENTRADA : ninguna (usa el grafo).
+        PROCESO : revisa todas las aristas; si alguna tiene un peso distinto de 1 es ponderado.
+        SALIDA  : True / False. Decide como se muestran la matriz (1/0 o pesos), las
+                  etiquetas del dibujo y las unidades ("conexiones") de la mejor ruta.
         """
         return any(p != 1 for v in self.ady.values() for p in v.values())
 
@@ -208,9 +284,11 @@ class Grafo:
     def aristas(self):
         """
         QUE HACE: lista las aristas SIN repetir.
-        PROCESO : en un grafo no dirigido (A,B) y (B,A) son la misma arista,
-                  por eso solo se cuenta una vez.
+        ENTRADA : ninguna (usa el grafo).
+        PROCESO : en un grafo no dirigido (A,B) y (B,A) son la misma arista, por eso solo
+                  se guarda cuando clave(A) < clave(B). En uno dirigido se guardan todas.
         SALIDA  : lista de tuplas (origen, destino, peso).
+        MATEMATICA: |E| = numero de aristas; se usa en el lema del apreton de manos.
         """
         lista = []
         for u in self.nodos():
@@ -222,11 +300,14 @@ class Grafo:
     # ---------------------------------------------------------------
     def matriz_adyacencia(self):
         """
-        QUE HACE: construye la MATRIZ DE ADYACENCIA.
+        QUE HACE: construye la MATRIZ DE ADYACENCIA A de tamano n x n.
+        ENTRADA : ninguna (usa el grafo).
         PROCESO : fila i, columna j -> arista i->j.
-                  Sin pesos: 1 si existe y 0 si no.
-                  Con pesos: el peso si existe y "-" si no.
-        SALIDA  : (lista_de_nodos, matriz como lista de listas)
+                  Sin pesos: A[i][j] = 1 si existe, 0 si no.
+                  Con pesos: A[i][j] = peso si existe, "-" si no. La diagonal es 0.
+        SALIDA  : (lista_de_nodos, matriz como lista de listas).
+        MATEMATICA: en un grafo NO dirigido la matriz es SIMETRICA (A[i][j] = A[j][i]);
+                  en uno dirigido no tiene por que serlo.
         """
         ponderado = self.es_ponderado()
         lista = self.nodos()
@@ -247,10 +328,12 @@ class Grafo:
     def grados(self):
         """
         QUE HACE: calcula el grado de cada nodo.
-        PROCESO : salida = aristas que salen del nodo;
-                  entrada = aristas que llegan a el.
-                  (En no dirigidos entrada = salida = grado.)
-        SALIDA  : diccionario nodo -> (entrada, salida)
+        ENTRADA : ninguna (usa el grafo).
+        PROCESO : salida = aristas que salen del nodo (largo de su lista de vecinos);
+                  entrada = aristas que llegan a el (se cuentan recorriendo todas las listas).
+        SALIDA  : diccionario nodo -> (entrada, salida). En no dirigidos ambos valores son iguales.
+        MATEMATICA: LEMA DEL APRETON DE MANOS: en un grafo no dirigido
+                  suma de los grados = 2 * (numero de aristas).
         """
         entrada = {n: 0 for n in self.ady}
         for u in self.ady:
@@ -261,10 +344,12 @@ class Grafo:
     # ---------------------------------------------------------------
     def componentes(self):
         """
-        QUE HACE: separa el grafo en COMPONENTES CONEXAS.
-        PROCESO : ignora el sentido de las aristas y hace BFS desde cada
-                  nodo todavia no visitado; cada BFS es una componente.
-        SALIDA  : lista de listas de nodos.
+        QUE HACE: separa el grafo en COMPONENTES CONEXAS (grupos de nodos alcanzables entre si).
+        ENTRADA : ninguna (usa el grafo).
+        PROCESO : ignora el sentido de las aristas y hace un BFS desde cada nodo todavia no
+                  visitado; cada BFS descubre una componente completa.
+        SALIDA  : lista de listas de nodos. Si hay una sola, el grafo es CONEXO.
+        MATEMATICA: costo O(V + E).
         """
         vec = {n: set() for n in self.ady}
         for u in self.ady:
@@ -290,12 +375,15 @@ class Grafo:
     # ---------------------------------------------------------------
     def bfs(self, inicio):
         """
+        QUE HACE: recorre el grafo en ANCHURA desde un nodo y devuelve el orden de visita.
         RECORRIDO EN ANCHURA (Breadth First Search).
         ENTRADA : nodo de inicio.
         PROCESO : mete el inicio en una cola; saca el primero, lo agrega al
                   recorrido y mete sus vecinos no visitados; repite hasta
                   vaciar la cola. Se visita por niveles (saltos).
         SALIDA  : lista con el orden de visita.
+        MATEMATICA: BFS recorre por NIVELES (distancia en saltos desde el inicio). Cada nodo y
+           cada arista se revisan una vez: costo O(V + E). La estructura clave es la COLA (FIFO).
         """
         visitados = {inicio}
         cola = deque([inicio])
@@ -312,17 +400,27 @@ class Grafo:
     # ---------------------------------------------------------------
     def dfs(self, inicio):
         """
+        QUE HACE: recorre el grafo en PROFUNDIDAD desde un nodo y devuelve el orden de visita.
         RECORRIDO EN PROFUNDIDAD (Depth First Search).
         ENTRADA : nodo de inicio.
         PROCESO : visita el nodo y se mete recursivamente en el primer
                   vecino no visitado; al no poder avanzar, retrocede
                   (backtracking) y prueba el siguiente.
         SALIDA  : lista con el orden de visita.
+        MATEMATICA: DFS baja lo mas posible por un camino y retrocede (backtracking). Costo
+           O(V + E). La recursion usa la PILA de llamadas (LIFO).
         """
         visitados = set()
         orden = []
 
         def visitar(nodo):
+            """
+            QUE HACE: visita un nodo y se mete recursivamente en sus vecinos.
+            ENTRADA : nodo actual.
+            PROCESO : lo marca como visitado, lo agrega al recorrido y llama a visitar() con
+                      cada vecino aun no visitado; al terminar con ellos retrocede.
+            SALIDA  : ninguna (llena las listas 'visitados' y 'orden').
+            """
             visitados.add(nodo)
             orden.append(nodo)
             for vecino in self.vecinos(nodo):
@@ -335,6 +433,7 @@ class Grafo:
     # ---------------------------------------------------------------
     def dijkstra(self, origen):
         """
+        QUE HACE: calcula la distancia minima desde un origen hasta todos los nodos.
         CAMINO MINIMO DESDE UN ORIGEN (algoritmo de Dijkstra).
         ENTRADA : nodo origen.
         PROCESO : 1) dist[origen] = 0, los demas = infinito.
@@ -346,6 +445,10 @@ class Grafo:
                   4) se repite hasta vaciar el heap.
         SALIDA  : (dist, previo)  distancia minima a cada nodo y el nodo
                   anterior en la mejor ruta (para reconstruirla).
+        MATEMATICA: resuelve el problema del CAMINO MINIMO desde un origen en un grafo con
+           pesos >= 0. Relajacion: dist[v] = min(dist[v], dist[u] + w(u,v)). Con heap cuesta
+           O((V + E) log V). Con pesos negativos podria dar resultados incorrectos; por eso
+           el programa los rechaza al leer los datos.
         """
         dist = {n: INF for n in self.ady}
         previo = {n: None for n in self.ady}
@@ -366,10 +469,11 @@ class Grafo:
     # ---------------------------------------------------------------
     def mejor_ruta(self, origen, destino):
         """
-        QUE HACE: obtiene la mejor ruta entre dos nodos.
-        PROCESO : ejecuta Dijkstra y reconstruye el camino hacia atras
-                  desde el destino usando 'previo'.
-        SALIDA  : (ruta, costo). Si no hay camino: ([], inf).
+        QUE HACE: obtiene la mejor ruta (la de menor costo) entre dos nodos.
+        ENTRADA : nodo origen y nodo destino.
+        PROCESO : ejecuta Dijkstra desde el origen y reconstruye el camino yendo hacia atras
+                  desde el destino con el diccionario 'previo' (previo[v] = nodo anterior).
+        SALIDA  : (ruta, costo). Si no hay camino devuelve ([], inf).
         """
         dist, previo = self.dijkstra(origen)
         if dist[destino] == INF:
@@ -422,6 +526,9 @@ def interpretar_texto(texto):
               aristas   = lista de pares (origen, destino)
               dirigido  = True/False
               izquierda = conjunto de nodos del grupo izquierdo o None
+    MATEMATICA: es el MODELADO del problema: personas/ordenadores/plazas = nodos (V) y
+       amistades/cables/calles = aristas (E). "hacia" produce un grafo dirigido; "elige"
+       produce un grafo bipartito (dos grupos y solo aristas entre grupos).
     """
     texto = re.sub(r"\b([A-Za-z])\.(\d+)", r"\1\2", texto)          # P.1 -> P1
     texto = re.sub(r"\bde\s+(?:la\s+|el\s+)?(\w+)\s+hacia", r"\1 hacia",
@@ -442,12 +549,26 @@ def interpretar_texto(texto):
     pendiente = []
 
     def unificar(pal):
+        """
+        QUE HACE: usa siempre la misma escritura para un nombre (Mexico = México = mexico).
+        ENTRADA : palabra tal como la escribio la persona.
+        PROCESO : busca su version sin acentos en el diccionario 'nombres'; si no esta, guarda
+                  la palabra con la primera letra en mayuscula.
+        SALIDA  : el nombre unificado.
+        """
         k = sin_acentos(pal)
         if k not in nombres:
             nombres[k] = pal[:1].upper() + pal[1:]
         return nombres[k]
 
     def guardar(suj, destinos):
+        """
+        QUE HACE: guarda las conexiones del sujeto actual.
+        ENTRADA : sujeto y lista de destinos.
+        PROCESO : agrega la arista (sujeto, destino) por cada destino (sin lazos a si mismo)
+                  y recuerda al sujeto si tuvo destinos.
+        SALIDA  : ninguna (agrega a las listas 'aristas' y 'sujetos').
+        """
         if suj is None:
             return
         for d in destinos:
@@ -481,6 +602,12 @@ def interpretar_texto(texto):
     if len(prefijos) == 1:
         pref = prefijos.pop()
         def completar(n):
+            """
+            QUE HACE: completa un numero suelto con el prefijo de las plazas (2 -> P2).
+            ENTRADA : nombre de nodo.
+            PROCESO : si es solo un numero le antepone el prefijo unico encontrado (P).
+            SALIDA  : el nombre completo.
+            """
             return pref + n if n.isdigit() else n
         aristas = [(completar(a), completar(b)) for a, b in aristas]
         sujetos = [completar(s) for s in sujetos]
@@ -521,8 +648,9 @@ def interpretar_linea_con_peso(linea):
 def construir_grafo(aristas, dirigido, izquierda=None, pesadas=()):
     """
     QUE HACE: arma el objeto Grafo con las conexiones interpretadas.
-    ENTRADA : aristas sin peso [(a,b)], dirigido, grupo izquierdo (bipartito)
-              y aristas con peso [(a,b,peso)].
+    ENTRADA : aristas sin peso [(a,b)], dirigido, grupo izquierdo (bipartito) y
+              aristas con peso [(a,b,peso)].
+    PROCESO : crea el Grafo y agrega cada arista (peso 1 si no tiene peso).
     SALIDA  : objeto Grafo.
     """
     g = Grafo(dirigido, izquierda)
@@ -535,8 +663,12 @@ def construir_grafo(aristas, dirigido, izquierda=None, pesadas=()):
 
 def mostrar_conexiones(grafo):
     """
-    QUE HACE: imprime como entendio el programa el problema (para que la
-              persona verifique que los datos quedaron bien).
+    QUE HACE: imprime como entendio el programa el problema, para que la persona
+              verifique que los datos quedaron bien.
+    ENTRADA : grafo.
+    PROCESO : indica el tipo (dirigido o no), cuenta nodos y conexiones y las muestra de
+              4 en 4 con "->" (dirigido) o "--" (no dirigido), con su peso si lo hay.
+    SALIDA  : texto en pantalla.
     """
     tipo = "DIRIGIDO" if grafo.dirigido else "NO DIRIGIDO"
     lista = grafo.aristas()
@@ -550,8 +682,10 @@ def mostrar_conexiones(grafo):
 
 def pedir_si_no(pregunta):
     """
-    QUE HACE: pregunta si/no y repite hasta que respondan bien.
-    SALIDA  : True si empieza con 's', False si con 'n'.
+    QUE HACE: hace una pregunta de si/no y repite hasta que respondan bien.
+    ENTRADA : texto de la pregunta.
+    PROCESO : lee la respuesta; si empieza con 's' o 'n' termina, si no vuelve a preguntar.
+    SALIDA  : True si la respuesta empieza con 's', False si con 'n'.
     """
     while True:
         r = input(pregunta + " (s/n): ").strip().lower()
@@ -567,6 +701,7 @@ def pedir_si_no(pregunta):
 # ===================================================================
 def modo_problema_completo():
     """
+    QUE HACE: lee el problema de grafos escrito por la persona y lo convierte en un Grafo.
     OPCION 1 - MODO PROBLEMA COMPLETO.
     ENTRADA : la persona escribe el problema (varias lineas) y termina con
               una linea vacia.
@@ -619,6 +754,7 @@ def modo_problema_completo():
 # ===================================================================
 def modo_datos_conocidos():
     """
+    QUE HACE: arma un Grafo con datos ya conocidos (nodos y conexiones) ingresados paso a paso.
     OPCION 2 - MODO DATOS CONOCIDOS.
     ENTRADA : tipo de grafo (dirigido, con pesos), nombres de los nodos y
               las conexiones, una por linea:
@@ -711,6 +847,7 @@ EJEMPLOS = [
 
 def ejemplo_precargado():
     """
+    QUE HACE: arma un Grafo a partir de uno de los 4 problemas de ejemplo.
     OPCION 3 - EJEMPLOS.
     ENTRADA : numero del ejemplo (1 a 4).
     PROCESO : toma el texto del problema y lo interpreta con
@@ -740,7 +877,11 @@ def ejemplo_precargado():
 # ===================================================================
 def mostrar_matriz(grafo):
     """
-    QUE HACE: imprime la matriz de adyacencia alineada en consola.
+    QUE HACE: imprime la matriz de adyacencia alineada en la consola.
+    ENTRADA : grafo.
+    PROCESO : obtiene la matriz con grafo.matriz_adyacencia() y alinea las columnas segun
+              el nombre de nodo mas largo; escribe la leyenda (1/0 o "-" = sin conexion).
+    SALIDA  : texto en pantalla.
     """
     nombres, matriz = grafo.matriz_adyacencia()
     ancho = max(4, max(len(n) for n in nombres) + 1)
@@ -754,6 +895,10 @@ def mostrar_matriz(grafo):
 def mostrar_lista(grafo):
     """
     QUE HACE: imprime la lista de adyacencia (cada nodo y sus vecinos).
+    ENTRADA : grafo.
+    PROCESO : para cada nodo escribe sus vecinos, con el peso entre parentesis si el
+              grafo es ponderado.
+    SALIDA  : texto en pantalla.
     """
     print("\nLISTA DE ADYACENCIA:")
     for n in grafo.nodos():
@@ -767,8 +912,10 @@ def mostrar_lista(grafo):
 def mostrar_grados_y_conexidad(grafo):
     """
     QUE HACE: muestra el grado de cada nodo y si el grafo es conexo.
-    PROCESO : en no dirigidos verifica el lema del apreton de manos
-              (suma de grados = 2 * aristas).
+    ENTRADA : grafo.
+    PROCESO : usa grafo.grados() y grafo.componentes(). En no dirigidos verifica el
+              lema del apreton de manos (suma de grados = 2 * aristas).
+    SALIDA  : texto en pantalla (grados, comprobacion del lema y componentes).
     """
     print("\nGRADO DE CADA NODO:")
     gr = grafo.grados()
@@ -802,6 +949,9 @@ def dibujar(grafo, ruta=None, titulo="Grafo"):
               o dos columnas si es bipartito), dibuja nodos, conexiones y
               pesos (solo si hay pesos) y pinta la mejor ruta de ROJO.
     SALIDA  : ventana grafica (se cierra para continuar el programa).
+    EXPLICACION: networkx solo se usa aqui para calcular posiciones y dibujar; matplotlib
+       muestra la ventana. Posiciones: circulo (<= 12 nodos), dos columnas si es bipartito,
+       spring_layout si hay mas nodos.
     """
     G = nx.DiGraph() if grafo.dirigido else nx.Graph()
     for u in grafo.nodos():
@@ -880,6 +1030,13 @@ def resolver(grafo):
     mostrar_grados_y_conexidad(grafo)
 
     def pedir_nodo(texto, defecto):
+        """
+        QUE HACE: pide un nodo y comprueba que exista.
+        ENTRADA : texto de la pregunta y nodo por defecto (se usa con solo presionar ENTER).
+        PROCESO : compara lo escrito sin acentos ni mayusculas con los nodos del grafo y
+                  repite si no existe.
+        SALIDA  : el nombre real del nodo.
+        """
         while True:
             n = sin_acentos(input(f"{texto} (ENTER = {defecto}): ").strip())
             if n == "":
@@ -918,6 +1075,7 @@ def resolver(grafo):
 # ===================================================================
 def menu_grafos():
     """
+    QUE HACE: muestra el menu de GRAFOS (problema completo, datos conocidos, ejemplo) y resuelve.
     MENU DE GRAFOS.
     ENTRADA : opcion elegida (1, 2, 3 o 0).
     PROCESO : arma el grafo segun el modo elegido y llama a resolver().
@@ -965,7 +1123,9 @@ CONECTORES_ARBOL = {"hijo", "hijos", "padre", "con"}
 def normalizar_valor(v):
     """
     QUE HACE: unifica como se escribe un valor (4.0 -> "4"; el texto no cambia).
-    ENTRADA : valor escrito por la persona.   SALIDA: texto.
+    ENTRADA : valor escrito por la persona.
+    PROCESO : intenta convertirlo a numero y formatearlo; si no es numero lo deja igual.
+    SALIDA  : texto.
     """
     try:
         return str(formatear(float(v)))
@@ -975,10 +1135,11 @@ def normalizar_valor(v):
 
 def clave_valor(v):
     """
-    QUE HACE: clave para COMPARAR valores en el arbol de busqueda.
-    PROCESO : los numeros se comparan como numeros y el texto en orden
-              alfabetico natural (los numeros van antes que el texto).
-    SALIDA  : tupla comparable.
+    QUE HACE: crea la clave para COMPARAR valores en el arbol de busqueda.
+    ENTRADA : valor (texto).
+    PROCESO : los numeros se comparan como numeros y el texto en orden alfabetico
+              natural; los numeros van antes que el texto.
+    SALIDA  : tupla comparable con < y ==.
     """
     try:
         return (0, float(v), [])
@@ -987,15 +1148,34 @@ def clave_valor(v):
 
 
 class Nodo:
-    """Un nodo del arbol: guarda un valor y sus hijos izquierdo y derecho."""
+    """
+    QUE ES: un nodo del arbol binario: guarda un valor y sus hijos izquierdo y derecho.
+    ENTRADA : valor del nodo (en __init__).
+    PROCESO : izq y der empiezan en None (= sin hijo).
+    SALIDA  : objeto Nodo.
+    """
 
     def __init__(self, valor):
+        """
+        QUE HACE: crea un nodo.
+        ENTRADA : valor.
+        PROCESO : guarda el valor y deja los dos hijos en None.
+        SALIDA  : nodo listo para enlazarse en el arbol.
+        """
         self.valor = valor
         self.izq = None
         self.der = None
 
 
 class Arbol:
+    """
+    QUE ES: un ARBOL BINARIO (cada nodo tiene como maximo 2 hijos) y sus recorridos.
+    METODOS: insertar, preorden, inorden, postorden, por_niveles, lista_nodos, altura,
+       posiciones.
+    PROBLEMAS MATEMATICOS QUE RESUELVE: insercion en arbol de busqueda, recorridos
+       PREORDEN / INORDEN / POSTORDEN / por niveles, altura y conteo de nodos y hojas.
+    MATEMATICA: un arbol es un grafo conexo sin ciclos, por eso aristas = nodos - 1.
+    """
     def __init__(self, es_abb=False):
         """
         QUE HACE: crea un arbol binario vacio.
@@ -1010,10 +1190,11 @@ class Arbol:
     def insertar(self, valor):
         """
         QUE HACE: inserta un valor siguiendo la regla del arbol de busqueda.
-        PROCESO : desde la raiz, si el valor es MENOR se baja por la
-                  izquierda y si es MAYOR por la derecha, hasta encontrar
-                  un lugar vacio. Costo O(altura).
-        SALIDA  : True si se inserto, False si el valor ya existia.
+        ENTRADA : valor a insertar.
+        PROCESO : desde la raiz, si el valor es MENOR se baja por la izquierda y si es MAYOR
+                  por la derecha, hasta encontrar un lugar vacio donde se coloca el nodo nuevo.
+        SALIDA  : True si se inserto, False si el valor ya existia (no se permiten repetidos).
+        MATEMATICA: costo O(altura): O(log n) si el arbol esta balanceado, O(n) en el peor caso.
         """
         nuevo = Nodo(valor)
         if self.raiz is None:
@@ -1039,13 +1220,24 @@ class Arbol:
     # ---------------------------------------------------------------
     def preorden(self):
         """
+        QUE HACE: recorre el arbol en PREORDEN y devuelve el orden de visita.
         RECORRIDO PREORDEN: RAIZ -> izquierdo -> derecho.
-        PROCESO : recursivo; primero se anota el nodo y luego sus hijos.
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : recursivo; primero se anota el nodo y luego se recorre su hijo izquierdo y
+                  despues el derecho.
         SALIDA  : lista de valores en el orden de visita.
+        MATEMATICA: costo O(n), cada nodo se visita una vez. En un arbol de expresion da la
+                  notacion PREFIJA.
         """
         res = []
 
         def rec(n):
+            """
+            QUE HACE: recorre un subarbol en preorden.
+            ENTRADA : nodo (puede ser None).
+            PROCESO : si existe, anota su valor y recorre el hijo izquierdo y luego el derecho.
+            SALIDA  : ninguna (llena la lista 'res').
+            """
             if n is None:
                 return
             res.append(n.valor)
@@ -1057,13 +1249,24 @@ class Arbol:
 
     def inorden(self):
         """
+        QUE HACE: recorre el arbol en INORDEN y devuelve el orden de visita.
         RECORRIDO INORDEN: izquierdo -> RAIZ -> derecho.
-        NOTA    : en un arbol de busqueda entrega los valores ORDENADOS.
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : recursivo; primero se recorre todo el hijo izquierdo, luego se anota el nodo
+                  y al final se recorre el hijo derecho.
         SALIDA  : lista de valores en el orden de visita.
+        MATEMATICA: costo O(n). En un arbol de busqueda entrega los valores ORDENADOS; en un
+                  arbol de expresion da la notacion INFIJA.
         """
         res = []
 
         def rec(n):
+            """
+            QUE HACE: recorre un subarbol en inorden.
+            ENTRADA : nodo (puede ser None).
+            PROCESO : recorre el hijo izquierdo, anota el valor del nodo y recorre el derecho.
+            SALIDA  : ninguna (llena la lista 'res').
+            """
             if n is None:
                 return
             rec(n.izq)
@@ -1075,13 +1278,22 @@ class Arbol:
 
     def postorden(self):
         """
+        QUE HACE: recorre el arbol en POSTORDEN y devuelve el orden de visita.
         RECORRIDO POSTORDEN: izquierdo -> derecho -> RAIZ.
-        PROCESO : cada nodo se anota despues de sus dos hijos.
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : recursivo; cada nodo se anota DESPUES de recorrer sus dos hijos.
         SALIDA  : lista de valores en el orden de visita.
+        MATEMATICA: costo O(n). En un arbol de expresion da la notacion POSFIJA.
         """
         res = []
 
         def rec(n):
+            """
+            QUE HACE: recorre un subarbol en postorden.
+            ENTRADA : nodo (puede ser None).
+            PROCESO : recorre el hijo izquierdo y el derecho y al final anota el valor del nodo.
+            SALIDA  : ninguna (llena la lista 'res').
+            """
             if n is None:
                 return
             rec(n.izq)
@@ -1093,8 +1305,13 @@ class Arbol:
 
     def por_niveles(self):
         """
-        RECORRIDO POR NIVELES (en anchura) con una COLA.
+        QUE HACE: recorre el arbol por NIVELES y devuelve el orden de visita.
+        RECORRIDO POR NIVELES (en anchura), igual que el BFS de los grafos.
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : mete la raiz en una COLA; saca el primero, lo anota y mete sus hijos
+                  (izquierdo y luego derecho); repite hasta vaciar la cola.
         SALIDA  : lista de valores nivel por nivel, de izquierda a derecha.
+        MATEMATICA: costo O(n).
         """
         res, cola = [], deque([self.raiz] if self.raiz else [])
         while cola:
@@ -1107,7 +1324,12 @@ class Arbol:
 
     # ---------------------------------------------------------------
     def lista_nodos(self):
-        """QUE HACE: devuelve todos los objetos Nodo (en preorden)."""
+        """
+        QUE HACE: devuelve todos los objetos Nodo del arbol.
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : recorrido en preorden con una PILA (sin recursion).
+        SALIDA  : lista de Nodo (sirve para contar nodos, hojas y dibujar las lineas).
+        """
         res, pila = [], [self.raiz] if self.raiz else []
         while pila:
             n = pila.pop()
@@ -1119,23 +1341,40 @@ class Arbol:
 
     def altura(self):
         """
-        QUE HACE: calcula la ALTURA = aristas del camino mas largo desde la
-                  raiz hasta una hoja (un arbol de 1 nodo tiene altura 0).
+        QUE HACE: calcula la ALTURA = aristas del camino mas largo desde la raiz hasta
+                  una hoja (un arbol de 1 nodo tiene altura 0).
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : recursivo: altura(nodo) = 1 + max(altura(izq), altura(der)); un arbol
+                  vacio vale -1.
+        SALIDA  : numero entero.
         """
         def rec(n):
+            """
+            QUE HACE: calcula la altura de un subarbol.
+            ENTRADA : nodo (None = arbol vacio).
+            PROCESO : un arbol vacio vale -1; si no, 1 + el maximo de las alturas de sus hijos.
+            SALIDA  : numero entero.
+            """
             return -1 if n is None else 1 + max(rec(n.izq), rec(n.der))
         return rec(self.raiz)
 
     def posiciones(self):
         """
         QUE HACE: calcula donde dibujar cada nodo.
-        PROCESO : x = posicion del nodo en el recorrido INORDEN;
-                  y = -profundidad (la raiz arriba).
+        ENTRADA : ninguna (usa el arbol).
+        PROCESO : x = posicion del nodo en el recorrido INORDEN (asi los nodos no se
+                  encimen); y = -profundidad (la raiz queda arriba).
         SALIDA  : diccionario valor -> (x, y).
         """
         pos, cont = {}, [0]
 
         def rec(n, prof):
+            """
+            QUE HACE: calcula las posiciones (x, y) de un subarbol.
+            ENTRADA : nodo y su profundidad.
+            PROCESO : recorre en inorden; x aumenta de 1 en 1 en ese orden y y = -profundidad.
+            SALIDA  : ninguna (llena el diccionario 'pos').
+            """
             if n is None:
                 return
             rec(n.izq, prof + 1)
@@ -1152,9 +1391,10 @@ class Arbol:
 # ===================================================================
 def armar_abb(valores):
     """
-    QUE HACE: arma un ARBOL BINARIO DE BUSQUEDA insertando los valores
-              en el orden dado.
+    QUE HACE: arma un ARBOL BINARIO DE BUSQUEDA insertando los valores en el orden dado.
     ENTRADA : lista de valores (numeros o texto).
+    PROCESO : normaliza cada valor y lo inserta con Arbol.insertar; los repetidos se
+              ignoran y se anotan.
     SALIDA  : (arbol, lista de valores repetidos que se ignoraron).
     """
     a, repetidos = Arbol(es_abb=True), []
@@ -1173,6 +1413,9 @@ def armar_arbol_relaciones(pares):
     PROCESO : valida que cada nodo tenga un solo padre, maximo 2 hijos,
               una sola raiz (nodo sin padre) y que no haya ciclos.
     SALIDA  : objeto Arbol. Si hay un error lanza ValueError con el motivo.
+    MATEMATICA: comprueba las propiedades de un arbol binario: cada nodo (menos la raiz)
+       tiene exactamente 1 padre, maximo 2 hijos, hay una sola raiz y no hay ciclos
+       (todos los nodos se alcanzan desde la raiz).
     """
     nombres, padre_de, hijos = [], {}, {}
     for p, h, l in pares:
@@ -1240,6 +1483,13 @@ def interpretar_arbol_texto(texto):
     usa_letras = any(l not in "YEAOU" for l in letras)
 
     def es_relleno(pal):
+        """
+        QUE HACE: decide si una palabra se ignora (no es un nodo ni un valor).
+        ENTRADA : palabra.
+        PROCESO : es relleno si esta en RELLENO_ARBOL o en PALABRAS_RELACION, salvo una letra
+                  mayuscula suelta cuando el problema usa letras como nodos (A, B, C...).
+        SALIDA  : True / False.
+        """
         letra_nodo = usa_letras and len(pal) == 1 and pal.isalpha() and pal.isupper()
         k = sin_acentos(pal)
         return (k in RELLENO_ARBOL or k in PALABRAS_RELACION) and not letra_nodo
@@ -1251,6 +1501,12 @@ def interpretar_arbol_texto(texto):
     pares, sujeto, pendiente, lado = [], None, [], None
 
     def guardar(suj, hijos):
+        """
+        QUE HACE: guarda las relaciones padre -> hijo del sujeto actual.
+        ENTRADA : sujeto (padre) y lista de (hijo, lado).
+        PROCESO : agrega (padre, hijo, lado) por cada hijo, sin lazos a si mismo.
+        SALIDA  : ninguna (agrega a la lista 'pares').
+        """
         if suj is not None:
             pares.extend((suj, h, l) for h, l in hijos if h != suj)
 
@@ -1278,13 +1534,21 @@ def interpretar_arbol_texto(texto):
 def texto_arbol(arbol):
     """
     QUE HACE: dibuja el arbol con texto, girado 90 grados.
-    PROCESO : la raiz queda a la izquierda; arriba van los hijos
-              DERECHOS y abajo los IZQUIERDOS.
+    ENTRADA : arbol.
+    PROCESO : recorrido recursivo "derecho, nodo, izquierdo"; la raiz queda a la izquierda,
+              arriba van los hijos DERECHOS y abajo los IZQUIERDOS; cada nivel se
+              sangra 6 espacios.
     SALIDA  : texto de varias lineas.
     """
     lineas = []
 
     def rec(n, nivel, rama):
+        """
+        QUE HACE: agrega a 'lineas' el subarbol de un nodo.
+        ENTRADA : nodo, nivel (profundidad) y etiqueta de rama ("(izq) " o "(der) ").
+        PROCESO : primero el hijo derecho, luego el nodo con su sangria y al final el izquierdo.
+        SALIDA  : ninguna (llena la lista 'lineas').
+        """
         if n is None:
             return
         rec(n.der, nivel + 1, "(der) ")
@@ -1298,6 +1562,8 @@ def texto_arbol(arbol):
 def estadisticas_arbol(arbol):
     """
     QUE HACE: calcula los datos matematicos del arbol.
+    ENTRADA : arbol.
+    PROCESO : cuenta los nodos, cuenta las hojas (nodos sin hijos) y calcula la altura.
     SALIDA  : (nodos, hojas, altura). Se cumple: aristas = nodos - 1.
     """
     nodos = arbol.lista_nodos()
@@ -1308,6 +1574,10 @@ def estadisticas_arbol(arbol):
 def mostrar_arbol(arbol):
     """
     QUE HACE: muestra como entendio el programa el arbol (para verificarlo).
+    ENTRADA : arbol.
+    PROCESO : escribe el tipo (binario o de busqueda), la raiz, nodos, hojas, altura y
+              el arbol en texto.
+    SALIDA  : texto en pantalla.
     """
     n, hojas, alt = estadisticas_arbol(arbol)
     tipo = "ARBOL BINARIO DE BUSQUEDA" if arbol.es_abb else "ARBOL BINARIO"
@@ -1321,6 +1591,7 @@ def mostrar_arbol(arbol):
 # ===================================================================
 def modo_problema_completo_arbol():
     """
+    QUE HACE: lee el problema de arboles escrito por la persona y lo convierte en un Arbol.
     OPCION 1 - MODO PROBLEMA COMPLETO (arboles).
     ENTRADA : la persona escribe el problema (varias lineas) y termina con
               una linea vacia.
@@ -1368,6 +1639,7 @@ def modo_problema_completo_arbol():
 # ===================================================================
 def modo_datos_conocidos_arbol():
     """
+    QUE HACE: arma un Arbol con datos ya conocidos (valores o conexiones padre-hijos).
     OPCION 2 - MODO DATOS CONOCIDOS (arboles).
     ENTRADA : 1) una lista de VALORES (se arma un arbol de busqueda), o
               2) conexiones PADRE HIJO_IZQ HIJO_DER, una por linea
@@ -1421,6 +1693,7 @@ def modo_datos_conocidos_arbol():
 # ===================================================================
 def ejemplo_precargado_arbol():
     """
+    QUE HACE: arma un Arbol a partir de uno de los 3 ejemplos.
     OPCION 3 - EJEMPLOS (arboles).
     ENTRADA : numero del ejemplo (1 a 3).
     PROCESO : arma el arbol del ejemplo elegido.
@@ -1470,6 +1743,8 @@ def dibujar_arbol(arbol, titulo="Arbol"):
               numeros en rojo indican en que lugar se visita cada nodo
               en PREORDEN, INORDEN y POSTORDEN.
     SALIDA  : ventana grafica (se cierra para continuar el programa).
+    EXPLICACION: solo usa matplotlib. Las posiciones salen de Arbol.posiciones() y el numero
+       rojo de cada nodo es su orden de visita, para ver la diferencia entre los 3 recorridos.
     """
     pos = arbol.posiciones()
     n = len(pos)
@@ -1580,7 +1855,12 @@ def guardar_y_abrir_html(nombre, titulo, cuerpo):
 
 
 def tabla_html(cabecera, filas):
-    """QUE HACE: arma una tabla HTML con una fila y una columna de titulos."""
+    """
+    QUE HACE: arma una tabla HTML con fila y columna de titulos (la matriz del reporte).
+    ENTRADA : lista de titulos y lista de filas.
+    PROCESO : escapa el texto con html.escape y arma <table>, <tr>, <th> y <td>.
+    SALIDA  : texto HTML.
+    """
     e = html.escape
     t = "<table><tr><th></th>" + "".join(f"<th>{e(str(c))}</th>" for c in cabecera) + "</tr>"
     for nombre, fila in zip(cabecera, filas):
@@ -1591,9 +1871,12 @@ def tabla_html(cabecera, filas):
 def svg_grafo(grafo, ruta=None):
     """
     QUE HACE: dibuja el grafo como imagen SVG (para el reporte HTML).
-    PROCESO : nodos en circulo (o en 2 columnas si es bipartito), lineas
-              o flechas por conexion, pesos si los hay y la mejor ruta en rojo.
+    ENTRADA : grafo y, opcionalmente, la ruta (lista de nodos) a resaltar.
+    PROCESO : posiciona los nodos en circulo (o en 2 columnas si es bipartito) con seno
+              y coseno: angulo = 2*pi*k/n; dibuja lineas o flechas por conexion, los
+              pesos si los hay, y la mejor ruta en rojo.
     SALIDA  : texto SVG.
+    MATEMATICA: coordenadas polares (x = cx + R*cos(a), y = cy + R*sin(a)).
     """
     e = html.escape
     nodos = grafo.nodos()
@@ -1616,6 +1899,14 @@ def svg_grafo(grafo, ruta=None):
         en_ruta |= {(b, a) for a, b in en_ruta}
 
     def trazo(u, v):
+        """
+        QUE HACE: calcula el trazo de una arista entre dos nodos.
+        ENTRADA : nodos u y v.
+        PROCESO : toma el vector unitario de u a v y acorta los extremos el radio del
+                  circulo para que la linea no entre al nodo; si es dirigido usa una curva
+                  (Bezier cuadratica) para que ida y vuelta no se tapen.
+        SALIDA  : (texto del trazo SVG, (x, y) del punto medio para el peso).
+        """
         x1, y1 = pos[u]
         x2, y2 = pos[v]
         d = math.hypot(x2 - x1, y2 - y1) or 1
@@ -1704,7 +1995,9 @@ def svg_arbol(arbol, orden):
     """
     QUE HACE: dibuja el arbol como imagen SVG con el orden de visita.
     ENTRADA : arbol y la lista de valores de un recorrido.
-    SALIDA  : texto SVG (circulos = nodos, numeros rojos = orden de visita).
+    PROCESO : usa arbol.posiciones() para ubicar los nodos, dibuja las lineas padre-hijo,
+              los circulos y, en cada nodo, un numero rojo con su lugar en el recorrido.
+    SALIDA  : texto SVG.
     """
     e = html.escape
     pos = arbol.posiciones()
@@ -1729,10 +2022,10 @@ def svg_arbol(arbol, orden):
 def reporte_arbol_html(arbol):
     """
     QUE HACE: crea el reporte HTML de un ARBOL y lo abre en el navegador.
-    PROCESO : muestra datos (nodos, hojas, altura), el arbol dibujado con el
-              orden de visita de cada recorrido (preorden, inorden,
-              postorden) y los recorridos escritos.
-    SALIDA  : archivo reporte_arbol.html abierto en el navegador.
+    ENTRADA : arbol.
+    PROCESO : arma los datos (nodos, hojas, altura), el arbol dibujado 3 veces con el
+              orden de visita de preorden, inorden y postorden y los recorridos escritos.
+    SALIDA  : archivo reporte_arbol.html guardado y abierto en el navegador.
     """
     e = html.escape
     n, hojas, alt = estadisticas_arbol(arbol)
@@ -1758,6 +2051,7 @@ def reporte_arbol_html(arbol):
 # ===================================================================
 def menu_arboles():
     """
+    QUE HACE: muestra el menu de ARBOLES y resuelve segun la opcion elegida.
     MENU DE ARBOLES (mismo esquema que el menu de grafos).
     ENTRADA : opcion elegida (1, 2, 3 o 0).
     PROCESO : arma el arbol segun el modo elegido, llama a resolver_arbol()
@@ -1792,6 +2086,7 @@ def menu_arboles():
 
 def menu_principal():
     """
+    QUE HACE: muestra el menu principal de estructuras (grafos o arboles).
     MENU PRINCIPAL DE ESTRUCTURAS.
     ENTRADA : opcion elegida (1, 2 o 0).
     PROCESO : abre el menu de GRAFOS o el de ARBOLES.
